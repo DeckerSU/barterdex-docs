@@ -1,7 +1,7 @@
 ## barterDEX whitepaper
 *unoffical russian translate by **Decker***
 
-* Оригинал документа: [barterDEX_whitepaper.rtf](./barterDEX_whitepaper.rtf) 
+* Оригинал документа: [https://github.com/SuperNETorg/komodo/wiki/barterDEX-Whitepaper-v2](https://github.com/SuperNETorg/komodo/wiki/barterDEX-Whitepaper-v2) 
 * Статус перевода: Черновик 1.0
 * Выделенные примечания в переводе (*Примечание*) сделаны лично мной, для облегчения понимания смысла whitepaper.
 

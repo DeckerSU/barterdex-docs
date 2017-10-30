@@ -1,0 +1,163 @@
+{\rtf1\ansi\ansicpg1252\cocoartf1504
+{\fonttbl\f0\fswiss\fcharset0 Helvetica;\f1\fnil\fcharset0 Menlo-Regular;}
+{\colortbl;\red255\green255\blue255;\red0\green0\blue0;\red255\green255\blue255;\red14\green14\blue255;
+}
+{\*\expandedcolortbl;\csgray\c100000;\csgray\c0;\csgray\c100000;\csgenericrgb\c5500\c5500\c100000;
+}
+\paperw11900\paperh16840\margl1440\margr1440\vieww21680\viewh13840\viewkind0
+\pard\tx566\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\pardirnatural\partightenfactor0
+
+\f0\fs40 \cf0 barterDEX - atomic swap decentralized exchange of native coins\
+\
+barterDEX is the result of years of development and iterated versions, with each iteration adding the next layer of required functionality to achieve the goal of large scale adoption.\
+\
+With this incarnation, barterDEX adds support for SPV electrum based coins in addition to dozens of normal bitcoin protocol coins running native coin daemons. Internally the \'93SPV\'94-ness of a coin is abstracted so that most of the api calls work transparently for SPV mode coins and native coin daemons. It also implements Liquidity Multiplication that allows the same funds to be used for asks in multiple orderbooks, where the first to fill gets the trade. This allows 100 BTC worth of funds to create thousands of BTC worth of liquidity and provides special advantage for traders that like to wait for below market dumps. While this feature is something that any other exchange could implement, very few if any do. All orderbook entries are 100% backed by real funds, yet the same funds can be part of 25 different orderbooks.\
+\
+With the obvious exception of the electrum api call itself and some differences in the returned JSON for calls like \'93listunspent\'94, it is possible to create a an api model that is the same for all coins.  In no particular order, the following is the list of api calls, with their parameters. <shossain made a much better api doc>\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f1\fs32 \cf2 \cb3 \CocoaLigature0 pricearray(base, rel, starttime=0, endtime=-1, timescale=60) -> [timestamp, avebid, aveask, highbid, lowask]\
+setprice(base, rel, price)\
+autoprice(base, rel, minprice, margin, refbase, refrel, factor, offset)*\
+goal(coin=*, val=<autocalc>)\
+myprice(base, rel)\
+enable(coin)\
+disable(coin)\
+notarizations(coin)\
+parselog()\
+statsdisp(starttime=0, endtime=0, gui=, pubkey=)\
+getrawtransaction(coin, txid)\
+inventory(coin)\
+bestfit(rel, relvolume)\
+lastnonce()\
+buy(base, rel, price, relvolume, timeout=10, duration=3600, nonce, pubkey=)\
+sell(base, rel, price, basevolume, timeout=10, duration=3600, nonce, pubkey=)\
+withdraw(coin, outputs[])\
+sendrawtransaction(coin, signedtx)\
+swapstatus()\
+swapstatus(coin, limit=10)\
+swapstatus(base, rel, limit=10)\
+swapstatus(requestid, quoteid)\
+recentswaps(limit=3)\
+\
+public API:\
+getcoins()\
+getcoin(coin)\
+portfolio()\
+getpeers()\
+passphrase(passphrase, gui)\
+listunspent(coin, address)\
+setconfirms(coin, numconfirms, maxconfirms=6)\
+trust(pubkey, trust) # positive to trust, 0 for normal, negative to blacklist\
+balance(coin, address)\
+orderbook(base, rel, duration=3600)\
+getprices(base, rel)\
+sendmessage(base=coin, rel=, pubkey=zero, <argjson method2>)\
+getmessages(firsti=0, num=100)\
+deletemessages(firsti=0, num=100)\
+secretaddresses(prefix='secretaddress', passphrase, num=10, pubtype=60, taddr=0)\
+electrum(coin, ipaddr, port)\
+snapshot(coin, height)\
+snapshot_balance(coin, height, addresses[])\
+dividends(coin, height, <args>)\
+stop()\
+
+\f0\fs40 \cf0 \cb1 \CocoaLigature1 \
+\pard\tx566\tx1133\tx1700\tx2267\tx2834\tx3401\tx3968\tx4535\tx5102\tx5669\tx6236\tx6803\pardirnatural\partightenfactor0
+\cf0 Further, coins with different lower level transaction and block differences are all mapped to a universal coin model and for all api, just specifying the \'93coin\'94 symbol is enough to get the same response. Bitcoin protocol is required, but even older coins without the CLTV opcode active can work on the liquidity taker side.\
+\
+The requirements for a coin to work in native mode are to have gettxout rpc call and if it has CLTV opcode it can be both the liquidity provider (bob) and the liquidity taker (alice). For coins using SPV, only liquidity taking is currently supported for overall network performance reasons. Also, the logic is that anybody that is serious about trading should be serious enough to install the coin daemon for the coins they are trading.\
+\
+Before we get into the atomic swap details, there is another aspect of barterDEX that is quite critical and that is the decentralized orderbook. In order to achieve this, barterDEX creates a custom peer to peer network that has the analogue of a full relay node and a node that doesnt relay. Network load on this network is minimized using a combination of hierarchical transmission of the orderbooks, along with fetching of data. Also, there are several different methods to obtain data to maximize the number of nodes that are able to fully connect to the barterDEX network.\
+\
+One aside to mention is that it is possible to create a totally separate set of barterDEX nodes by seeding the network with a totally independent set of seed nodes. This enables scaling of barterDEX to arbitrary levels as, if any scaling limit is reached, it is a matter to create a separate network that doesnt directly interconnect with the other. At such scale the assumption is that there are plenty of inventory in the orderbooks, especially if the partitioning is done on a per reference coin basis. In the event it is desired to cross polinate orderbook entries from disparate barterDEX networks, it would be possible to have special bridge nodes that cherry pick the desired entries from one network to the other.\
+\
+Since addressing in the barterDEX network is via a curve25519 pubkey, the IP address of a node does not matter and for non-relaying nodes it is never part of any barterDEX protocol packet. Only a malicious relay node that is monitoring ip addresses at the low level would be able to link IP address to pubkeys. However, barterDEX is about trading using the blockchain, which is a public activity. Do not assume there is any privacy due to barterDEX. For privacy, use JUMBLR.\
+\
+Anybody that wants to can run a full relaying node, there is no specific payment to do this and it does require more bandwidth. However by being a full relaying node, you have better connectivity with all the other nodes and thus a higher percentage chance of having a trade started and completed. This increase in reliability would be enough for active traders and also for signficant owners of the DEX asset, just making sure there are enough full nodes is a good thing to do.\
+\
+A non-relaying node is able to do everything a full relaying node can do, so we expect that the vast majority of nodes will be non-relaying nodes and this will enable the barterDEX network to scale to a large number of total nodes. With 100 full nodes, thousands of non-relay nodes can be supported, possibly tens of thousands, though that number has not been reached in practice, so we will have to wait and see what the real world limitations are.\
+\
+A third significant part of barterDEX is the iguana code base that it was forked from. This enables a speciality wallet that handles all the supported coins to be created using a totally self contained set of source code. All of the atomic swap protocol transactions are custom raw transactions that are created and signed by the iguana code. By utilizing the "withdraw" api command, it is possible for a general purpose wallet to be created that uses the barterDEX api. It uses a passphrase generated privkey, so there is no wallet.dat that barterDEX itself maintains and it only uses the single address derived from the active privkey. All coins get an address but they are based on the same privkey. Funds deposited to this smartaddress, automatically become eligible for trading. Notice that all funds are only spendable by the user with the passphrase, and that its privkey is imported into any local wallets. this allows using the normal coin daemon to do transactions, but be careful if you do to not use the same utxo as being used by a pending swap!\
+\
+Atomic Swaps\
+\
+barterDEX implements the Tier Nolan protocol as described in the bitcointalk thread {\field{\*\fldinst{HYPERLINK "https://bitcointalk.org/index.php?topic=1364951"}}{\fldrslt 
+\f1\fs36 \cf4 \CocoaLigature0 https://bitcointalk.org/index.php?topic=1364951}}\
+While the thread is quite technical, it gives a very good background into the tradeoffs that went into selecting the atomic swap protocol. The important thing to note is that at each step of the protocol there are incentives/disincentives to proceed to the next step and that regardless of where the protocol stops, each party ends up with what they should get. The understanding is that if you don\'92t follow the protocol, you will end up paying some amount of penalty.\
+\
+In order to achieve this, the liquidity provider, who we call bob, needs to have a deposit to ensure his completion of the protocol. This means that bob needs two utxos to do an atomic swap. alice also needs two utxos, but her additional utxo is the dexfee that is required to prevent spamming the orderbook. Without this, alice could initiate an unlimited number of atomic swaps and the bobs would all be simply stuck waiting for the time period to expire to get a refund of their deposit. With the dexfee there is a financial cost to alice for such bad behavior, since there is no financial gain for alice to be annoying, we expect that there wont be much intentional spamming.\
+\
+Ignoring all the validation details of each step, the atomic swap consists of up to 7 transactions, in some cases it would be less. The following shows the mainstream SWAP complete! sequence for both sides:\
+\
+1. alice sends dexfee\
+2. bob sends bobdeposit\
+3. alice sends alicepayment\
+4. bob sends bobpayment\
+5. alice spends the bobpayment\
+6. bob spends the alicepayment\
+7. bob refunds his own deposit\
+\
+While it seems a bit inefficient to have 7 transactions for a swap that could be done with just 2 transactions, this is what is required to make it trustless and have the characteristic that at any step, there are incentives to go to the next step and where both sides end up with the right amounts regardless of where things stop.\
+\
+Let us see what happens if things just stop at a certain step:\
+\
+1. alice sends dexfee. If bob does not send the bobdeposit, alice is out a dexfee, which is 1/777 of the transaction amount. this will then give bob a bad reputation and very quickly nobody will trade with bob. As long as the frequency of bob failing to deposit is low, the occasional extra dexfee is a minor issue. Contigency plans are in place to provide refunds if a particular alice node experiences a materially large amount of lost dexfees.\
+\
+2. bob sends bobdeposit. If alice doesnt send the alicepayment, then alice loses not only the dexfee but gains a bad reputation and soon nobody would trade with alice. We dont expect this to happen that often.\
+\
+3. alice sends alicepayment. if bob doesnt send in payment, after 4 hours, alice can claim the bobdeposit, which is 12.5% larger than the payment, so alice ends up with a nice bonus in this case. I would not be surprised if the alice nodes are eager for this case of atomic swap protocol.\
+\
+4. bob sends bobpayment. if alice doesnt spend the bobpayment, then after 2 hours he can reclaim his payment and then after 4 hours refund his deposit. Once bob refunds his own deposit, then alice is able to reclaim her payment. It is all intricately interconnected as the spending of a specific transaction enables the other party to spend their counterpart.\
+\
+5. alice spends the bobpayment. If bob doesnt spend the alicepayment, alice is already done with the trading, so there is no more she needs. Bob is sleeping and doesnt spend the alicepayment, then he is out the alicepayment until he spends it. this is up to bob, but it is a bit dangerous as if he does refund of the deposit before spending alicepayment, alice would get the info needed to reclaim her payment. It is important for both participants to continue running the atomic swap protocol until it completes. If after 4 hours, bob is still sleeping, then alice is able to claim the deposit and become a happy camper. alice spending the bob deposit however does not give her the information needed to reclaim her own payment, so bob is still able to do this when he wakes up.\
+\
+6. bob spends the alicepayment. Similar to above, if bob doesnt refund his own deposit, it is his loss and purely his responsibility. If after 4 hours, he still hasnt, then alice will be able to claim the deposit.\
+\
+7. bob refunds his own deposit. as you can see at each step, the side that needs to do something is motivated to do so, with greater and greater urgency toward the end.\
+\
+barterDEX implements the above in a cross platform way, across almost a hundred coins, using either native coin daemon's or SPV electrum servers. A swap that is not completed during one session can be completed as long as barterDEX is run before the time expires. it is best to not trade a very large amount unless you are sure in your node's reliability, especially the internet connection.\
+\
+Believe it or not, doing the above atomic swap protocol with all the cryptographic validations in between along with a fancy key exchange, is less than half the difficulty of barterDEX. Relatively speaking, it is "easy" to do an atomic swap in isolation between two test nodes with carefully prepared utxos made specially for the test. It is an entirely different matter to be able to let anybody start trading with anybody else and have things like orderbooks and ordermatching happen. Due to the peer to peer nature, it is impossible to guarantee a successful swap, however a failed swap to start is just a few seconds of lost time and there is no cost to try to start a swap. just like in normal trading, there is no guarantee that you can get the trade you want, similarily there is no guarantee with barterDEX. \
+\
+Let us see what is required in a bit more detail as we now have the context of the atomic swap protocol. In order to even start an atomic swap, there needs to be a pair from alice so the dexfee and alicepayment can be created and also two from bob, so the bobdeposit and bobpayment can be created. barterDEX requires all four of these utxos to be specified before the start of the atomic swap protocol.\
+\
+Here comes the first user issue. Most users dont even know what a utxo is and most view their balance as a single blob of coins they can spend at the satoshi level. The reality is that bitcoin protocol maintains a list of unspent transaction outputs (utxo) of specific values and to make a transaction, there needs to be inputs sufficient to pay for the outputs. Any excess goes into a change output (let us ignore txfees for now, even though barterDEX automatically calculates the current BTC txfee to pay that will get confirmed quickly).\
+\
+It is not practical to have the user specify which utxo pair to use, and it is not possible for alice to even know what utxos bob has available at the moment of negotiating a trade.  What barterDEX does is an atomic swap negotiation protocol as follows:\
+\
+1. alice sends a "request" to a specific bob with her pair of utxos, price and volume\
+\
+2. bob validates the "request" to make sure the alice utxos are valid and that the price is acceptable, then bob scans all his utxos for the most efficient way to create both the bobpayment and bobdeposit utxos. The constraint is that it needs to match the price alice wants to pay and the volume and the deposit at least 12.5% bigger than the payment. If all these things are met, the bob sends back a "reserved" packet to alice. By doing this just in time, bob minimizes the funds that are tied up doing deposit duty.\
+\
+3. alice validates the "reserved" packet from bob, making sure all the utxos are valid, the price and volumes are acceptable and if so sends a "connect" packet to bob with the same parameters as in the "reserved". Between the "request" being sent and the "reserved" being received or a 10 second timeout, alice is prevented from making any other trade request. It is important to make sure the current pending atomic swap is properly started and this prevention is also part of the whale resistance for dICO.\
+\
+4. bob validates the "connect" and if all is well starts a new thread to do the atomic swap.\
+\
+5. alice receives the "connect" and if all is well starts a new thread to do the atomic swap.\
+\
+There is one more "negotiation" step that is needed between alice and bob and while it could have been part of the 5 steps above, due to legacy reasons it ended up inside the atomic swap protocol itself. In the event there is no consensus on the coin confirmations to use, the atomic swap aborts without any payments being sent. No harm, no foul.\
+\
+Since barterDEX is trading real coins and not just updating an internal database (or a proxy tokens account balance for proxy DEX), both sides need to wait for coin confirmations to the level they are comfortable. Since the payments sent on one chain wont be reorganized if the other chain does, it is important to have enough confirmations for the size of the trade being done. In order to enable this, there is a setconfirms api call that can be called for each coin. This needs to be done before the atomic swap is started as the current numconfirms for the coin will be sent to the other side and the larger of alice or bob's numconfirms will be used. There is also a maxconfirms value to prevent one side from specifying something crazy like 100 BTC confirms!\
+\
+There is one extreme mode in this area where zero confirms (zeroconf) can be set! Now it is quite risky to do this, especially for fast blocktime coins with low hashrate. However for internal testing, or trading between friends, it becomes a lot more fun to see an atomic swap complete from start to finish in 13 seconds. The idea is that between people that agree to make things right in case of unexpected blockchain reorgs, if the people trust each other enough that the other party will do what is neede dto make things right, then zeroconf trading would be enabled. There is a special trust api to set positive trust. If set negative, that pubkey is blacklisted.\
+\
+One last aspect of the ordermatch process is the realtime metrics (RTmetrics) that are used to filter the possible candidates for matching. All the nodes are tracking global stats via the stats.log file and this allows each node to update the list of pending swaps. Using this information, less priority is given to nodes that are busy. Additionally, alice gives less preference to bobs that dont have the right range of utxo sizes in the orderbook. This part is still quite new and can be enhanced a lot in the next barterDEX iteration.\
+\
+We have now worked backwards from the atomic swap details to the ordermatch process and this leaves the efficient orderbook propagation as the only part left to describe. barterDEX uses a convention of base/rel meaning base currency converted to rel currency. Buying a base/rel means to use rel currency to buy base currency, price denominated in base/rel. <decker made a nice document to cover this>\
+\
+In order to construct an orderbook a node needs to have price information and since everything is pubkey based, this means a price from a pubkey. Ultimately a specific txid/vout (utxo) is needed, but a single node could have hundreds of utxos and this would use up a lot of network bandwidth to propagate it globally. barterDEX therefore uses a hierarchical orderbook, where the skeleton of it is just the pubkey/price for a particular base/rel pair. Note that a buy of base/rel at price is the same as a sell of rel/base at 1/price. So all that is needed to populate the orderbook skeleton is for a node to broadcast its pubkey and price for a base/rel pair. Given this, nodes that are running a local coin daemon can instantly find the possible list of utxos via listunspent... ooops, bitcoin nodes dont fully index by address, so actually this is not available service and what is needed is for a node to also broadcast its list of utxos and this is done in the background on-demand.\
+\
+Critical information is fully signed to prevent spoofing, so all nodes can verify the smartaddress associated with a pubkey and also that the price being broadcast is a valid price. The electrum SPV coins do a specific SPV validation for all utxo before they are approved for trading.\
+\
+If all nodes were always broadcasting all their utxos to everybody, it would rapidly lead to congestion. Most of the time barterDEX just relies on the pubkey/prices and this is enough to create useful orderbooks. Since there are N*N possible orderbooks given N currencies, it is not practical to be updating all possible orderbooks, instead they are created when requested from the raw data. During the orderbook creation, if the top entries in the orderbook dont have any listunspent data, a request for it is made to the network.\
+\
+This process ensures that by the time a trade is done, already an orderbook has been requested which in turn requests the listunspent data for the most likely pubkeys. The actual ordermatch process then iterates through the orderbook scanning all the locally known utxos to find a high probability counterparty to make the "request" offer to. In practice we are seeing nearly instantaneous response when all the parameters are properly met.\
+\
+The above is a high level summary of the barterDEX that is already implemented and live. Details are subject to change, but as of 29 October 2017 barterDEX has reached feature complete and ready at the core level for the upcoming Monaize dICO. This dICO will be a trial by fire so to speak with potentially a large number of atomic swaps invoked at the same time. Current stress testing indicates that the expected load will be able to be handled, the only issues would be if we get unexpectely high volumes...\
+\
+barterDEX will continue to evolve and this iteration has identified a few areas of improvement for the next iteration. With several different GUI being built on top of the barterDEX 1.0 api, new iterations will maintain backward compatibility in the api. \
+\
+<easyDEX whitepaper should probably be used as an appendix>\
+}
